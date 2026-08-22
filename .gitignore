@@ -1,0 +1,87 @@
+# =============================================================================
+# .gitignore - Backend (Node.js + Express + Prisma ORM)
+# =============================================================================
+
+# 1. Dependencias
+node_modules/
+.pnp
+.pnp.js
+
+# 2. Variables de entorno y secretos (NUNCA commitear archivos .env reales)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*
+!.env.example
+
+# 3. Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# 4. Archivos de compilación y salida
+dist/
+build/
+out/
+
+# 5. Base de datos local / Prisma
+*.sqlite
+*.sqlite-journal
+*.db
+*.db-journal
+dev.db
+dev.db-journal
+
+# 6. Datos temporales y en tiempo de ejecución
+pids
+*.pid
+*.seed
+*.pid.lock
+*.tmp
+*.temp
+tmp/
+temp/
+
+# 7. Pruebas y cobertura de código (Testing & Coverage)
+coverage/
+*.lcov
+.nyc_output
+
+# 8. Caché de TypeScript y Linters
+*.tsbuildinfo
+.eslintcache
+.cache/
+
+# 9. Configuraciones de Editores / IDEs
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.swp
+*.swo
+
+# 10. Archivos generados por el Sistema Operativo
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+
+# 11. Archivos comprimidos
+*.tgz
+*.tar.gz
+*.zip

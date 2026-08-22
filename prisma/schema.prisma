@@ -1,0 +1,175 @@
+// ============================================================================
+// Prisma Schema - Niche Dating Telegram Mini App (PostgreSQL Optimized)
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// ENUMS
+// ----------------------------------------------------------------------------
+
+enum GenderIdentity {
+  FEMBOY
+  TRANS_FEM
+  TRANS_MASC
+  CROSSDRESSER
+  OTHER
+
+  @@map("gender_identity")
+}
+
+enum SwipeType {
+  LIKE
+  DISLIKE
+  SUPERLIKE
+
+  @@map("swipe_type")
+}
+
+enum TransactionItemType {
+  VIP_MONTHLY
+  BOOST
+  SUPERLIKE
+
+  @@map("transaction_item_type")
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+
+  @@map("transaction_status")
+}
+
+// ----------------------------------------------------------------------------
+// MODELS
+// ----------------------------------------------------------------------------
+
+model User {
+  id             String          @id @default(uuid()) @db.Uuid
+  telegramId     BigInt          @unique @map("telegram_id")
+  username       String?         @map("username") @db.VarChar(64)
+  firstName      String          @map("first_name") @db.VarChar(128)
+  birthDate      DateTime?       @map("birth_date") @db.Date
+  genderIdentity GenderIdentity? @map("gender_identity")
+  bio            String?         @map("bio") @db.VarChar(500)
+  city           String?         @map("city") @db.VarChar(100)
+  latitude       Float?          @map("latitude")
+  longitude      Float?          @map("longitude")
+  isVerified     Boolean         @default(false) @map("is_verified")
+  isVip          Boolean         @default(false) @map("is_vip")
+  vipExpiresAt   DateTime?       @map("vip_expires_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relaciones
+  photos           UserPhoto[]
+  preference       Preference?
+  swipesSent       Swipe[]           @relation("UserSwipesSent")
+  swipesReceived   Swipe[]           @relation("UserSwipesReceived")
+  matchesAsUserA   Match[]           @relation("MatchesAsUserA")
+  matchesAsUserB   Match[]           @relation("MatchesAsUserB")
+  starTransactions StarTransaction[]
+
+  // Índices para búsquedas frecuentes y optimización del feed de descubrimiento
+  @@index([latitude, longitude], name: "idx_users_location")
+  @@index([genderIdentity, isVip], name: "idx_users_gender_vip")
+  @@index([city], name: "idx_users_city")
+  @@index([birthDate], name: "idx_users_birth_date")
+  @@map("users")
+}
+
+model UserPhoto {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  url        String   @map("url") @db.Text
+  orderIndex Int      @default(0) @map("order_index") @db.SmallInt
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orderIndex], name: "uq_user_photo_order")
+  @@index([userId], name: "idx_user_photos_user_id")
+  @@map("user_photos")
+}
+
+model Preference {
+  id            String           @id @default(uuid()) @db.Uuid
+  userId        String           @unique @map("user_id") @db.Uuid
+  targetGenders GenderIdentity[] @map("target_genders")
+  minAge        Int              @default(18) @map("min_age") @db.SmallInt
+  maxAge        Int              @default(99) @map("max_age") @db.SmallInt
+  maxDistanceKm Int              @default(50) @map("max_distance_km") @db.SmallInt
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("preferences")
+}
+
+model Swipe {
+  id         String    @id @default(uuid()) @db.Uuid
+  fromUserId String    @map("from_user_id") @db.Uuid
+  toUserId   String    @map("to_user_id") @db.Uuid
+  type       SwipeType @map("type")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  fromUser User @relation("UserSwipesSent", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User @relation("UserSwipesReceived", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  // Restricción única para evitar swiping duplicado entre los mismos dos usuarios
+  @@unique([fromUserId, toUserId], name: "uq_from_to_swipe")
+  // Índice para filtrar usuarios ya vistos y saber quién le dio like a un usuario ("Who liked me")
+  @@index([toUserId, type], name: "idx_swipes_to_user_type")
+  @@index([fromUserId, createdAt(sort: Desc)], name: "idx_swipes_from_user_created")
+  @@map("swipes")
+}
+
+model Match {
+  id        String   @id @default(uuid()) @db.Uuid
+  userAId   String   @map("user_a_id") @db.Uuid
+  userBId   String   @map("user_b_id") @db.Uuid
+  matchedAt DateTime @default(now()) @map("matched_at") @db.Timestamptz
+  isActive  Boolean  @default(true) @map("is_active")
+
+  userA User @relation("MatchesAsUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB User @relation("MatchesAsUserB", fields: [userBId], references: [id], onDelete: Cascade)
+
+  // Evita registrar el match duplicado entre los dos mismos perfiles
+  @@unique([userAId, userBId], name: "uq_user_a_user_b_match")
+  // Índices para consultar rápidamente los matches activos de cada usuario
+  @@index([userAId, isActive], name: "idx_matches_user_a_active")
+  @@index([userBId, isActive], name: "idx_matches_user_b_active")
+  @@index([matchedAt(sort: Desc)], name: "idx_matches_matched_at")
+  @@map("matches")
+}
+
+model StarTransaction {
+  id                      String              @id @default(uuid()) @db.Uuid
+  telegramPaymentChargeId String              @unique @map("telegram_payment_charge_id") @db.VarChar(255)
+  userId                  String              @map("user_id") @db.Uuid
+  starsAmount             Int                 @map("stars_amount")
+  itemType                TransactionItemType @map("item_type")
+  status                  TransactionStatus   @default(PENDING) @map("status")
+  rawPayload              Json?               @map("raw_payload")
+  createdAt               DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt               DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Índices para historial de transacciones y auditoría
+  @@index([userId, status], name: "idx_transactions_user_status")
+  @@index([createdAt(sort: Desc)], name: "idx_transactions_created_at")
+  @@map("star_transactions")
+}
