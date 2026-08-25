@@ -1,4 +1,4 @@
-import app from './app.js';
+import app, { allowedOrigins } from './app.js';
 import { env } from './config/env.js';
 import prisma from './services/prisma.js';
 
@@ -7,6 +7,7 @@ const PORT = env.PORT;
 const server = app.listen(PORT, () => {
   console.log(`🚀 [Server] Telegram Mini App Backend running on port ${PORT}`);
   console.log(`📡 [Environment] ${env.NODE_ENV}`);
+  console.log(`🌐 [CORS Allowed] ${allowedOrigins.join(', ')} (Vite port 5173 enabled)`);
   console.log(`🩺 [Health Check] http://localhost:${PORT}/health`);
 });
 
