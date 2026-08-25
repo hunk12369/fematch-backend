@@ -11,35 +11,40 @@ export async function validateAndSyncUser(req, res, next) {
       });
     }
 
-    // Upsert user in database via Prisma
-    const user = await prisma.user.upsert({
+    // 1. Buscar si el usuario ya existe en PostgreSQL
+    const existingUser = await prisma.user.findUnique({
       where: {
         telegramId: BigInt(telegramUser.id),
       },
-      update: {
-        firstName: telegramUser.first_name || '',
-        lastName: telegramUser.last_name || null,
-        username: telegramUser.username || null,
-        languageCode: telegramUser.language_code || null,
-        isPremium: Boolean(telegramUser.is_premium),
-        allowsWriteToPm: Boolean(telegramUser.allows_write_to_pm),
-      },
-      create: {
-        telegramId: BigInt(telegramUser.id),
-        firstName: telegramUser.first_name || '',
-        lastName: telegramUser.last_name || null,
-        username: telegramUser.username || null,
-        languageCode: telegramUser.language_code || null,
-        isPremium: Boolean(telegramUser.is_premium),
-        allowsWriteToPm: Boolean(telegramUser.allows_write_to_pm),
+      include: {
+        photos: {
+          orderBy: { orderIndex: 'asc' },
+        },
+        preference: true,
       },
     });
+
+    // 2. Si no existe en la BD -> Retornar isNewUser: true para disparar onboarding
+    if (!existingUser) {
+      return res.json({
+        success: true,
+        isNewUser: true,
+        data: {
+          telegramUser,
+        },
+      });
+    }
+
+    // 3. Si existe, comprobar si completó el perfil
+    const isProfileIncomplete = !existingUser.genderIdentity || !existingUser.birthDate;
 
     return res.json({
       success: true,
       message: 'Telegram authentication successful',
+      isNewUser: isProfileIncomplete,
+      isProfileIncomplete,
       data: {
-        user,
+        user: existingUser,
         telegramUser,
       },
     });

@@ -10,8 +10,9 @@ const app = express();
 // Security Headers
 app.use(helmet());
 
-// CORS Configuration (Habilitado para Vite dev server: 5173 / 4173 y orígenes configurados)
+// CORS Configuration
 const defaultAllowedOrigins = [
+  'https://fematch-frontend.vercel.app',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://localhost:4173',
@@ -35,12 +36,17 @@ app.use(
       // Permitir peticiones sin header Origin (server-to-server, webhooks, mobile apps nativas, curl)
       if (!origin) return callback(null, true);
 
-      // Si coincide con los orígenes permitidos
-      if (env.CORS_ORIGIN === '*' || allowedOrigins.includes(origin)) {
+      // Si coincide exactamente con los orígenes permitidos o wildcard
+      if (
+        env.CORS_ORIGIN === '*' ||
+        allowedOrigins.includes(origin) ||
+        origin.endsWith('.vercel.app') ||
+        origin.endsWith('.telegram.org')
+      ) {
         return callback(null, true);
       }
 
-      // En desarrollo, permitir túneles y cualquier IP local (útil para pruebas en dispositivos móviles)
+      // En desarrollo, permitir túneles y cualquier IP local
       if (
         !env.isProduction &&
         (origin.endsWith('.ngrok-free.app') ||
@@ -54,7 +60,13 @@ app.use(
       callback(new Error(`Bloqueado por CORS: El origen ${origin} no tiene acceso permitido.`));
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-telegram-init-data'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-telegram-init-data',
+      'x-telegram-theme',
+      'X-Telegram-Theme',
+    ],
     credentials: true,
     optionsSuccessStatus: 200,
   })
