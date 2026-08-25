@@ -168,7 +168,6 @@ export async function completeOnboarding(req, res, next) {
         },
         update: {
           firstName: telegramUser.first_name || '',
-          lastName: telegramUser.last_name || null,
           username: telegramUser.username || null,
           genderIdentity,
           birthDate: parsedBirthDate,
@@ -180,7 +179,6 @@ export async function completeOnboarding(req, res, next) {
         create: {
           telegramId: BigInt(telegramUser.id),
           firstName: telegramUser.first_name || '',
-          lastName: telegramUser.last_name || null,
           username: telegramUser.username || null,
           genderIdentity,
           birthDate: parsedBirthDate,
