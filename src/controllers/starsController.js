@@ -46,16 +46,11 @@ export async function createInvoiceLinkHandler(req, res, next) {
 
     const product = STARS_PRODUCTS[itemType];
 
-    // 2. Generar payload firmado criptográficamente
-    const payloadData = {
+    // 2. Generar payload firmado criptográficamente (máx 128 bytes)
+    const signedPayload = generateSignedPayload({
       userId: currentUser.id,
-      telegramId: String(currentUser.telegramId),
       itemType: product.itemType,
-      starsAmount: product.starsAmount,
-      timestamp: Date.now(),
-    };
-
-    const signedPayload = generateSignedPayload(payloadData);
+    });
 
     // 3. Crear enlace de factura oficial de Telegram Stars (XTR)
     const invoiceLink = await createStarsInvoiceLink({
