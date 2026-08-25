@@ -317,3 +317,106 @@ export async function handleSwipe(req, res, next) {
     next(error);
   }
 }
+
+/**
+ * GET /api/matches
+ * Consulta los registros de la tabla Match donde el usuario autenticado sea user_a_id o user_b_id.
+ * Retorna la lista de matches mutuos con matchId, matchedAt y los datos del perfil emparejado.
+ */
+export async function getMatches(req, res, next) {
+  try {
+    const telegramId = req.telegramUser?.id;
+
+    if (!telegramId) {
+      return res.status(401).json({
+        success: false,
+        error: 'No Telegram authentication context found',
+      });
+    }
+
+    // 1. Obtener el ID del usuario autenticado en la base de datos
+    const currentUser = await prisma.user.findUnique({
+      where: { telegramId: BigInt(telegramId) },
+      select: { id: true },
+    });
+
+    if (!currentUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'User profile not found. Please sync user first',
+      });
+    }
+
+    // 2. Consultar registros de Match activos donde el usuario sea userAId o userBId
+    const matches = await prisma.match.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { userAId: currentUser.id },
+          { userBId: currentUser.id },
+        ],
+      },
+      include: {
+        userA: {
+          select: {
+            id: true,
+            firstName: true,
+            username: true,
+            photos: {
+              where: { orderIndex: 0 },
+              take: 1,
+              select: { url: true },
+            },
+          },
+        },
+        userB: {
+          select: {
+            id: true,
+            firstName: true,
+            username: true,
+            photos: {
+              where: { orderIndex: 0 },
+              take: 1,
+              select: { url: true },
+            },
+          },
+        },
+      },
+      orderBy: {
+        matchedAt: 'desc',
+      },
+    });
+
+    // 3. Extraer los datos del perfil de la otra persona
+    const formattedMatches = matches.map((match) => {
+      const isUserA = match.userAId === currentUser.id;
+      const matchedUser = isUserA ? match.userB : match.userA;
+
+      return {
+        matchId: match.id,
+        matchedAt: match.matchedAt,
+        user: {
+          id: matchedUser.id,
+          firstName: matchedUser.firstName,
+          username: matchedUser.username,
+          photoUrl: matchedUser.photos[0]?.url || null,
+        },
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        matches: formattedMatches,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export default {
+  getFeed,
+  handleSwipe,
+  getMatches,
+};
