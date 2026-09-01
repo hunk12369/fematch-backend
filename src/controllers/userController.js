@@ -91,6 +91,9 @@ export async function getMe(req, res, next) {
  */
 export async function completeOnboarding(req, res, next) {
   try {
+    console.log('[Onboarding Attempt] TelegramUser:', JSON.stringify(req.telegramUser));
+    console.log('[Onboarding Attempt] Body Payload:', JSON.stringify(req.body));
+
     const telegramUser = req.telegramUser;
 
     if (!telegramUser || !telegramUser.id) {
@@ -247,10 +250,12 @@ export async function completeOnboarding(req, res, next) {
       data: result,
     });
   } catch (error) {
-    console.error('[Onboarding Error]:', error);
+    const errorMessage = error.meta?.message || error.message || 'Error desconocido en base de datos';
+    console.error('[Onboarding Catch Error]:', error);
     return res.status(error.status || 400).json({
       success: false,
-      error: error.message || 'Error al procesar el onboarding del usuario',
+      error: errorMessage,
+      details: error.meta || null,
     });
   }
 }
