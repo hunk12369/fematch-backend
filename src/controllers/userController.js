@@ -1,6 +1,15 @@
 import prisma from '../services/prisma.js';
 
-const VALID_GENDERS = ['FEMBOY', 'TRANS_FEM', 'TRANS_MASC', 'CROSSDRESSER', 'OTHER'];
+const VALID_GENDERS = [
+  'FEMBOY',
+  'TRANS_FEM',
+  'TRANS_MASC',
+  'CROSSDRESSER',
+  'MAN_ACTIVE',
+  'MAN_PASSIVE',
+  'MAN_VERSATILE',
+  'OTHER',
+];
 
 /**
  * Helper para calcular la edad a partir de birthDate

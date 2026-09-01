@@ -20,6 +20,9 @@ enum GenderIdentity {
   TRANS_FEM
   TRANS_MASC
   CROSSDRESSER
+  MAN_ACTIVE
+  MAN_PASSIVE
+  MAN_VERSATILE
   OTHER
 
   @@map("gender_identity")
