@@ -53,12 +53,12 @@ export async function getMe(req, res, next) {
       },
     });
 
-    // 2. Si no existe en la base de datos -> Usuario nuevo (debe completar onboarding)
+    // 2. Si no existe en la base de datos -> Retornar inmediatamente isNewUser: true con data: null
     if (!user) {
       return res.status(200).json({
         success: true,
         isNewUser: true,
-        telegramUser,
+        data: null,
       });
     }
 
@@ -79,6 +79,7 @@ export async function getMe(req, res, next) {
       },
     });
   } catch (error) {
+    console.error('[User Me Error]:', error);
     next(error);
   }
 }
@@ -98,6 +99,11 @@ export async function completeOnboarding(req, res, next) {
         error: 'No Telegram authentication context found',
       });
     }
+
+    // Extraer y sanear datos de Telegram (soporte para cuentas sin username o nombres vacíos)
+    const telegramId = BigInt(telegramUser.id);
+    const firstName = telegramUser.first_name ? String(telegramUser.first_name).trim() : 'Usuario';
+    const username = telegramUser.username ? String(telegramUser.username).trim() : null;
 
     const {
       gender_identity,
@@ -150,7 +156,16 @@ export async function completeOnboarding(req, res, next) {
       });
     }
 
-    // 3. Validar preferencias de género
+    // 3. Sanear coordenadas GPS (parseFloat seguro o null)
+    const parsedLatitude = (latitude !== null && latitude !== undefined && latitude !== '' && !isNaN(parseFloat(latitude)))
+      ? parseFloat(latitude)
+      : null;
+
+    const parsedLongitude = (longitude !== null && longitude !== undefined && longitude !== '' && !isNaN(parseFloat(longitude)))
+      ? parseFloat(longitude)
+      : null;
+
+    // 4. Validar y sanear preferencias de búsqueda
     const sanitizedTargetGenders = Array.isArray(targetGenders)
       ? targetGenders.filter((g) => VALID_GENDERS.includes(g))
       : [];
@@ -159,33 +174,33 @@ export async function completeOnboarding(req, res, next) {
     const sanitizedMaxAge = Math.min(99, Math.max(sanitizedMinAge, parseInt(maxAge, 10) || 99));
     const sanitizedMaxDistance = Math.min(500, Math.max(1, parseInt(maxDistanceKm, 10) || 50));
 
-    // 4. Ejecutar transacción atómica de Prisma
+    // 5. Ejecutar transacción atómica de Prisma
     const result = await prisma.$transaction(async (tx) => {
       // Upsert de Usuario con datos de Telegram + datos de Onboarding
       const user = await tx.user.upsert({
         where: {
-          telegramId: BigInt(telegramUser.id),
+          telegramId,
         },
         update: {
-          firstName: telegramUser.first_name || '',
-          username: telegramUser.username || null,
+          firstName,
+          username,
           genderIdentity,
           birthDate: parsedBirthDate,
-          bio: bio ? bio.trim().slice(0, 500) : null,
-          city: city ? city.trim().slice(0, 100) : null,
-          ...(latitude !== null && { latitude: parseFloat(latitude) }),
-          ...(longitude !== null && { longitude: parseFloat(longitude) }),
+          bio: bio ? String(bio).trim().slice(0, 500) : null,
+          city: city ? String(city).trim().slice(0, 100) : null,
+          latitude: parsedLatitude,
+          longitude: parsedLongitude,
         },
         create: {
-          telegramId: BigInt(telegramUser.id),
-          firstName: telegramUser.first_name || '',
-          username: telegramUser.username || null,
+          telegramId,
+          firstName,
+          username,
           genderIdentity,
           birthDate: parsedBirthDate,
-          bio: bio ? bio.trim().slice(0, 500) : null,
-          city: city ? city.trim().slice(0, 100) : null,
-          latitude: latitude !== null ? parseFloat(latitude) : null,
-          longitude: longitude !== null ? parseFloat(longitude) : null,
+          bio: bio ? String(bio).trim().slice(0, 500) : null,
+          city: city ? String(city).trim().slice(0, 100) : null,
+          latitude: parsedLatitude,
+          longitude: parsedLongitude,
         },
       });
 
@@ -232,7 +247,11 @@ export async function completeOnboarding(req, res, next) {
       data: result,
     });
   } catch (error) {
-    next(error);
+    console.error('[Onboarding Error]:', error);
+    return res.status(error.status || 400).json({
+      success: false,
+      error: error.message || 'Error al procesar el onboarding del usuario',
+    });
   }
 }
 

@@ -50,14 +50,24 @@ export async function uploadUserPhoto(req, res, next) {
       });
     }
 
-    // 3. Determinar el siguiente orderIndex disponible
-    let targetOrderIndex = 0;
-    if (req.body.orderIndex !== undefined && req.body.orderIndex !== null) {
-      targetOrderIndex = parseInt(req.body.orderIndex, 10);
+    // 3. Determinar el orderIndex seguro y dinámico para evitar colisiones P2002
+    const existingIndexes = user.photos.map((p) => p.orderIndex);
+    let finalOrderIndex = 0;
+
+    if (req.body.orderIndex !== undefined && req.body.orderIndex !== null && req.body.orderIndex !== '') {
+      const requestedIndex = parseInt(req.body.orderIndex, 10);
+      // Si el índice solicitado ya está ocupado, buscar el siguiente índice libre disponible
+      if (existingIndexes.includes(requestedIndex)) {
+        while (existingIndexes.includes(finalOrderIndex)) {
+          finalOrderIndex++;
+        }
+      } else {
+        finalOrderIndex = requestedIndex;
+      }
     } else {
-      const existingIndexes = user.photos.map((p) => p.orderIndex);
-      while (existingIndexes.includes(targetOrderIndex)) {
-        targetOrderIndex++;
+      // Si no viene en la petición, calcular el siguiente slot libre disponible
+      while (existingIndexes.includes(finalOrderIndex)) {
+        finalOrderIndex++;
       }
     }
 
@@ -70,23 +80,55 @@ export async function uploadUserPhoto(req, res, next) {
       originalName: req.file.originalname,
     });
 
-    // 5. Guardar el registro en la base de datos con Prisma
-    const newPhoto = await prisma.userPhoto.create({
-      data: {
-        userId: user.id,
-        url: uploadResult.url,
-        orderIndex: targetOrderIndex,
-      },
-    });
+    // 5. Guardar o actualizar registro con upsert para evitar error P2002
+    let savedPhoto;
+    try {
+      savedPhoto = await prisma.userPhoto.upsert({
+        where: {
+          uq_user_photo_order: {
+            userId: user.id,
+            orderIndex: finalOrderIndex,
+          },
+        },
+        update: {
+          url: uploadResult.url,
+        },
+        create: {
+          userId: user.id,
+          url: uploadResult.url,
+          orderIndex: finalOrderIndex,
+        },
+      });
+    } catch (p2002Error) {
+      if (p2002Error.code === 'P2002') {
+        // Reintento calculando el conteo actual de fotos
+        const photoCount = await prisma.userPhoto.count({ where: { userId: user.id } });
+        savedPhoto = await prisma.userPhoto.create({
+          data: {
+            userId: user.id,
+            url: uploadResult.url,
+            orderIndex: photoCount + 1,
+          },
+        });
+      } else {
+        throw p2002Error;
+      }
+    }
 
     return res.status(201).json({
       success: true,
       message: 'Foto de perfil subida y guardada exitosamente.',
       data: {
-        photo: newPhoto,
+        photo: savedPhoto,
       },
     });
   } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(409).json({
+        success: false,
+        error: 'Conflicto: Ya existe una foto con ese orden de posición. Por favor, intenta de nuevo.',
+      });
+    }
     next(error);
   }
 }
